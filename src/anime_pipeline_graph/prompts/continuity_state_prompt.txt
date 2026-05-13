@@ -1,0 +1,33 @@
+你是 continuity state tracker。请生成跨帧连续性状态账本。
+仅输出严格 JSON，格式：
+{
+  "continuity_ledger": [
+    {
+      "frame_index": 1,
+      "character_state": {
+        "角色名": {
+          "outfit": "服装状态",
+          "hair": "发型状态",
+          "expression_baseline": "表情基线"
+        }
+      },
+      "scene_state": {
+        "time_of_day": "时间段",
+        "weather": "天气",
+        "lighting": "光照基线"
+      },
+      "object_state": {},
+      "narrative_state": {
+        "event_progress": 1,
+        "continuity_anchor": "连续性锚点"
+      }
+    }
+  ]
+}
+
+要求：
+1) 覆盖全部帧。
+2) 明确每帧与上一帧相比哪些状态应保持、哪些允许变化。
+3) 与 transition_plan / expression_plan 保持一致。
+4) 仅输出 JSON。
+

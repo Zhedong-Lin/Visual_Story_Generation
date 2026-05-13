@@ -1,0 +1,39 @@
+lulu:
+  appearance: "young girl, long straight black hair with a white flower hair clip, large brown eyes, soft round face, slim small build"
+  outfit: "yellow short-sleeve dress with a light waistband, white shoes"
+  must_keep: "keep long black hair with flower accessory, large brown eyes, and yellow dress color scheme consistent"
+
+jiddo:
+  appearance: "elderly man, short gray hair, round face with soft wrinkles, glasses, chubby build"
+  outfit: "blue long-sleeve shirt with a red vest, dark pants, black shoes"
+  must_keep: "keep gray hair, glasses, facial wrinkles, and red vest with blue shirt color combination consistent"
+
+dad:
+  appearance: "adult man, medium brown side-parted hair, full dark beard and mustache, large brown eyes, warm round face, average build"
+  outfit: "red long-sleeve sweater over a white collared shirt, blue pants, brown shoes"
+  must_keep: "keep dark beard, side-parted brown hair, large brown eyes, and red sweater with blue pants color combination consistent"
+
+kishmish:
+  appearance: "fluffy orange cat, round face, half-closed sleepy brown eyes, small pink nose, long whiskers, thick striped tail, soft chubby body"
+  outfit: "natural orange and cream fur with darker orange stripes, fluffy cream chest and paws"
+  must_keep: "keep fluffy orange fur, sleepy half-closed eyes, striped tail, cream chest, and rounded cat body consistent"
+
+zane:
+  appearance: "young boy, short brown side-swept hair, large brown eyes, soft round face, small slim build"
+  outfit: "blue and white striped short-sleeve shirt with blue sleeves, dark blue pants, red and white shoes"
+  must_keep: "keep side-swept brown hair, large brown eyes, blue striped shirt, and dark blue pants color scheme consistent"
+
+jamal:
+  appearance: "young boy, warm brown skin, short curly dark hair, large brown eyes, round cheerful face, small sturdy build"
+  outfit: "green short-sleeve polo shirt, dark shorts, white socks, red and white sneakers"
+  must_keep: "keep curly dark hair, warm brown skin, large brown eyes, green polo shirt, dark shorts, and red sneakers consistent"
+
+mama:
+  appearance: "adult woman, shoulder-length reddish brown hair, large brown eyes, soft oval face, gentle expression, average build"
+  outfit: "light blue long-sleeve button-up blouse, dark navy pleated skirt, dark blue heels"
+  must_keep: "keep reddish brown shoulder-length hair, large brown eyes, light blue blouse, and dark navy skirt color combination consistent"
+
+bibi:
+  appearance: "elderly woman, short wavy gray hair, round face with soft wrinkles, glasses, rosy cheeks, chubby build"
+  outfit: "pink long-sleeve blouse with a light collar, dark gray skirt, burgundy shoes"
+  must_keep: "keep gray hair, glasses, soft wrinkles, pink blouse, dark skirt, and gentle grandmotherly look consistent"

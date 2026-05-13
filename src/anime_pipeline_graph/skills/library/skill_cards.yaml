@@ -1,0 +1,426 @@
+skills:
+  - name: asset_normalizer
+    description: 统一参考图尺寸/格式，减少后续模型输入差异。
+    skill_type: builder
+    applicability_conditions: [single_image, storyboard, preprocessing]
+    input_schema:
+      images: {type: artifact}
+    output_schema:
+      normalized_images: {type: artifact}
+    preconditions: []
+    effects: [assets_normalized]
+    allowed_predecessors: []
+    allowed_successors: [character_bind, scene_condition, pose_extract]
+    failure_modes: [invalid_image_format, resize_artifact]
+    graph_motifs: [preprocess_chain]
+
+  - name: character_bind
+    description: 角色身份锚定，输出角色参考与LoRA映射元信息。
+    skill_type: builder
+    applicability_conditions: [single_image, storyboard, identity]
+    input_schema:
+      character_references: {type: artifact, optional: true}
+      character_brief: {type: text, optional: true}
+      lora_path: {type: artifact, optional: true}
+    output_schema:
+      char_anchor: {type: object}
+    preconditions: [character_exists]
+    effects: [character_anchor_ready, identity_hint_ready]
+    allowed_predecessors: [asset_normalizer, story_decompose]
+    allowed_successors: [scene_condition, transition_plan, shot_plan, pose_plan, expression_plan, continuity_state_tracker, visual_style_plan, prompt_pack_builder, base_generation, edit, fill_edit]
+    failure_modes: [missing_character_refs, lora_mismatch]
+    failure_mode_repairs:
+      missing_preconditions:
+        - {op: AddNode, skill: character_bind, node_id: character_bind_autofix}
+      missing_character_refs:
+        - {op: AddEdge, target: prompt_pack_builder_autofix}
+      identity_drift:
+        - {op: AddNode, skill: edit, node_id: edit_identity_fix}
+        - {op: AddEdge, source: base_generation_autofix, target: edit_identity_fix}
+    graph_motifs: [storyboard_generation_chain, single_image_generation_chain, local_edit_chain]
+
+  - name: scene_condition
+    description: 场景参考条件包构建。
+    skill_type: builder
+    applicability_conditions: [single_image, storyboard, scene_conditioning]
+    input_schema:
+      scene_references: {type: artifact, optional: true}
+      prompt: {type: text}
+      setting_docs: {type: text, optional: true}
+    output_schema:
+      scene_pack: {type: object}
+    preconditions: []
+    effects: [scene_context_ready]
+    allowed_predecessors: [asset_normalizer, story_decompose, character_bind]
+    allowed_successors: [transition_plan, shot_plan, pose_plan, expression_plan, continuity_state_tracker, visual_style_plan, prompt_pack_builder, base_generation, edit, fill_edit]
+    failure_modes: [scene_ref_missing, weak_scene_alignment]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: scene_condition, node_id: scene_condition_autofix}
+      weak_scene_alignment:
+        - {op: AddNode, skill: edit, node_id: edit_scene_fix}
+    graph_motifs: [storyboard_generation_chain, single_image_generation_chain, local_edit_chain]
+
+  - name: story_decompose
+    description: 将用户故事拆分为分镜帧描述。
+    skill_type: planner
+    applicability_conditions: [storyboard, multi_frame]
+    input_schema:
+      prompt: {type: text}
+      num_frames: {type: integer}
+    output_schema:
+      frame_specs: {type: object}
+    preconditions: [num_frames>1]
+    effects: [frame_specs_ready]
+    allowed_predecessors: []
+    allowed_successors: [character_bind, scene_condition, transition_plan, shot_plan, pose_plan, expression_plan, continuity_state_tracker, visual_style_plan, prompt_pack_builder]
+    failure_modes: [coarse_frame_split, inconsistent_timeline]
+    failure_mode_repairs:
+      missing_preconditions:
+        - {op: InsertMotif, steps: [story_decompose, prompt_pack_builder, base_generation]}
+      inconsistent_timeline:
+        - {op: ReplaceNode, skill: story_decompose}
+    graph_motifs: [storyboard_generation_chain]
+
+  - name: pose_plan
+    description: 逐帧动作/镜头构图规划。
+    skill_type: planner
+    applicability_conditions: [storyboard, pose_control]
+    input_schema:
+      character_names: {type: object}
+      prompt: {type: text}
+    output_schema:
+      pose_plan_json: {type: object}
+    preconditions: []
+    effects: [pose_plan_ready]
+    allowed_predecessors: [story_decompose, character_bind, scene_condition, transition_plan, shot_plan]
+    allowed_successors: [expression_plan, continuity_state_tracker, prompt_pack_builder, base_generation, edit]
+    failure_modes: [pose_ambiguity, camera_inconsistency]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: pose_plan, node_id: pose_plan_autofix}
+      pose_ambiguity:
+        - {op: AddNode, skill: pose_extract, node_id: pose_extract_autofix}
+    graph_motifs: [storyboard_generation_chain, pose_control_chain]
+
+  - name: shot_plan
+    description: 逐帧镜头语言规划（景别/机位/构图/视点连续）。
+    skill_type: planner
+    applicability_conditions: [storyboard, cinematic_language]
+    input_schema:
+      character_names: {type: object}
+      frame_descriptions: {type: object}
+      num_frames: {type: integer}
+      scene_names: {type: object, optional: true}
+    output_schema:
+      shot_plan_json: {type: object}
+    preconditions: []
+    effects: [shot_plan_ready]
+    allowed_predecessors: [story_decompose, character_bind, scene_condition, transition_plan]
+    allowed_successors: [pose_plan, expression_plan, continuity_state_tracker, prompt_pack_builder]
+    failure_modes: [shot_scale_mismatch, camera_axis_instability]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: shot_plan, node_id: shot_plan_autofix}
+      camera_axis_instability:
+        - {op: ReplaceNode, skill: shot_plan}
+    graph_motifs: [storyboard_generation_chain, cinematic_storyboard_chain]
+
+  - name: transition_plan
+    description: 帧间过渡规划（same-action cut/scene change/time jump等）。
+    skill_type: planner
+    applicability_conditions: [storyboard, transition]
+    input_schema:
+      frame_descriptions: {type: object}
+      num_frames: {type: integer}
+      task_type: {type: text}
+    output_schema:
+      transition_plan_json: {type: object}
+    preconditions: []
+    effects: [transition_plan_ready]
+    allowed_predecessors: [story_decompose, character_bind, scene_condition]
+    allowed_successors: [shot_plan, continuity_state_tracker, prompt_pack_builder]
+    failure_modes: [transition_jump_conflict, continuity_level_miss]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: transition_plan, node_id: transition_plan_autofix}
+    graph_motifs: [storyboard_generation_chain, transition_aware_chain]
+
+  - name: expression_plan
+    description: 逐帧表情和情绪变化规划。
+    skill_type: planner
+    applicability_conditions: [storyboard, expression_consistency]
+    input_schema:
+      character_names: {type: object}
+      frame_descriptions: {type: object}
+      num_frames: {type: integer}
+    output_schema:
+      expression_plan_json: {type: object}
+    preconditions: []
+    effects: [expression_plan_ready]
+    allowed_predecessors: [story_decompose, character_bind, scene_condition, transition_plan, shot_plan, pose_plan]
+    allowed_successors: [continuity_state_tracker, prompt_pack_builder, base_generation]
+    failure_modes: [emotion_drift, missing_expression_transition]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: expression_plan, node_id: expression_plan_autofix}
+      emotion_drift:
+        - {op: ReplaceNode, skill: expression_plan}
+    graph_motifs: [storyboard_generation_chain]
+
+  - name: continuity_state_tracker
+    description: 维护跨帧状态账本（角色/场景/道具/叙事状态）。
+    skill_type: planner
+    applicability_conditions: [storyboard, continuity]
+    input_schema:
+      character_names: {type: object}
+      scene_names: {type: object}
+      frame_descriptions: {type: object}
+      num_frames: {type: integer}
+      shot_plan_json: {type: object, optional: true}
+      transition_plan_json: {type: object, optional: true}
+      expression_plan_json: {type: object, optional: true}
+    output_schema:
+      continuity_state: {type: object}
+    preconditions: []
+    effects: [continuity_state_ready]
+    allowed_predecessors: [story_decompose, scene_condition, shot_plan, transition_plan, pose_plan, expression_plan]
+    allowed_successors: [prompt_pack_builder, base_generation, edit, judge]
+    failure_modes: [state_drift, object_continuity_error]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: continuity_state_tracker, node_id: continuity_state_autofix}
+      state_drift:
+        - {op: AddNode, skill: edit, node_id: edit_continuity_fix}
+    graph_motifs: [storyboard_generation_chain, continuity_control_chain]
+
+  - name: visual_style_plan
+    description: 风格圣经规划（画风、色板、光照、线条密度）。
+    skill_type: planner
+    applicability_conditions: [storyboard, style_consistency]
+    input_schema:
+      user_text: {type: text}
+      task_type: {type: text}
+      scene_names: {type: object}
+      character_names: {type: object}
+      num_frames: {type: integer}
+    output_schema:
+      visual_style_plan: {type: object}
+    preconditions: []
+    effects: [style_bible_ready]
+    allowed_predecessors: [story_decompose, scene_condition, continuity_state_tracker, expression_plan, shot_plan]
+    allowed_successors: [prompt_pack_builder, base_generation, edit]
+    failure_modes: [style_flicker, palette_instability]
+    failure_mode_repairs:
+      style_flicker:
+        - {op: AddNode, skill: visual_style_plan, node_id: visual_style_plan_autofix}
+    graph_motifs: [storyboard_generation_chain, style_consistency_chain]
+
+  - name: pose_extract
+    description: 从动作参考图提取骨架控制信息。
+    skill_type: planner
+    applicability_conditions: [single_image, storyboard, pose_reference]
+    input_schema:
+      action_reference: {type: artifact}
+    output_schema:
+      pose_skeleton: {type: artifact}
+    preconditions: []
+    effects: [pose_skeleton_ready]
+    allowed_predecessors: [asset_normalizer]
+    allowed_successors: [base_generation, edit, fill_edit]
+    failure_modes: [skeleton_noise, extraction_failure]
+    failure_mode_repairs:
+      missing_conditioning:
+        - {op: AddNode, skill: pose_extract, node_id: pose_extract_autofix}
+      skeleton_noise:
+        - {op: RemoveNode, node_id: pose_extract_autofix}
+    graph_motifs: [pose_control_chain]
+
+  - name: prompt_pack_builder
+    description: 聚合角色/场景/动作/表情条件，产出可执行 prompt pack。
+    skill_type: builder
+    applicability_conditions: [storyboard, single_image, generation]
+    input_schema:
+      task_spec: {type: object}
+      scene_pack: {type: artifact, optional: true}
+      char_anchor: {type: artifact, optional: true}
+      pose_plan_json: {type: artifact, optional: true}
+      shot_plan_json: {type: artifact, optional: true}
+      transition_plan_json: {type: artifact, optional: true}
+      expression_plan_json: {type: artifact, optional: true}
+      continuity_state: {type: artifact, optional: true}
+      visual_style_plan: {type: artifact, optional: true}
+      frame_specs: {type: artifact, optional: true}
+    output_schema:
+      prompt_pack: {type: artifact}
+    preconditions: []
+    effects: [prompt_pack_ready]
+    allowed_predecessors: [story_decompose, character_bind, scene_condition, transition_plan, shot_plan, pose_plan, expression_plan, continuity_state_tracker, visual_style_plan]
+    allowed_successors: [base_generation, edit, fill_edit]
+    failure_modes: [missing_conditioning, weak_prompt_coherence, wardrobe_transition_miss]
+    failure_mode_repairs:
+      missing_prompt_builder:
+        - {op: AddNode, skill: prompt_pack_builder, node_id: prompt_pack_builder_autofix}
+      missing_conditioning:
+        - {op: AddNode, skill: prompt_pack_builder, node_id: prompt_pack_builder_autofix}
+      wardrobe_transition_miss:
+        - {op: AddNode, skill: edit, node_id: edit_outfit_fix}
+        - {op: AddEdge, source: base_generation_autofix, target: edit_outfit_fix}
+    graph_motifs: [storyboard_generation_chain, single_image_generation_chain]
+
+  - name: base_generation
+    description: 基础生成主路径，适合从文本+条件包出图。
+    skill_type: generator
+    applicability_conditions: [single_image, storyboard, generation]
+    input_schema:
+      prompt_pack: {type: artifact}
+      char_anchor: {type: artifact, optional: true}
+      scene_pack: {type: artifact, optional: true}
+      pose_plan_json: {type: artifact, optional: true}
+      pose_skeleton: {type: artifact, optional: true}
+    output_schema:
+      generated_images: {type: artifact}
+    preconditions: [prompt_pack_ready]
+    effects: [images_ready]
+    allowed_predecessors: [prompt_pack_builder, character_bind, scene_condition, pose_extract]
+    allowed_successors: [judge, refine, edit, fill_edit]
+    failure_modes: [identity_drift, scene_drift, prompt_underfit]
+    failure_mode_repairs:
+      missing_generation_path:
+        - {op: AddNode, skill: base_generation, node_id: base_generation_autofix}
+      prompt_underfit:
+        - {op: AddNode, skill: prompt_pack_builder, node_id: prompt_pack_builder_autofix}
+        - {op: AddEdge, source: prompt_pack_builder_autofix, target: base_generation_autofix}
+      identity_drift:
+        - {op: AddNode, skill: edit, node_id: edit_identity_fix}
+        - {op: AddEdge, source: base_generation_autofix, target: edit_identity_fix}
+    graph_motifs: [storyboard_generation_chain, single_image_generation_chain]
+
+  - name: edit
+    description: 无mask编辑，适合换装或整体重绘修正。
+    skill_type: editor
+    applicability_conditions: [local_edit, single_image, storyboard]
+    input_schema:
+      image: {type: artifact, optional: true}
+      instruction: {type: text}
+      refs: {type: artifact, optional: true}
+    output_schema:
+      edited_image: {type: artifact}
+    preconditions: [image_exists]
+    effects: [images_ready]
+    allowed_predecessors: [character_bind, scene_condition, pose_plan, pose_extract, base_generation]
+    allowed_successors: [judge, refine]
+    failure_modes: [over_edit, identity_shift, costume_artifact]
+    failure_mode_repairs:
+      missing_preconditions:
+        - {op: AddNode, skill: base_generation, node_id: base_generation_autofix}
+      costume_artifact:
+        - {op: AddNode, skill: fill_edit, node_id: fill_edit_costume_fix}
+      identity_shift:
+        - {op: AddNode, skill: character_bind, node_id: character_bind_reanchor}
+    graph_motifs: [local_edit_chain, outfit_transition_chain]
+
+  - name: fill_edit
+    description: 有mask局部编辑，适合局部服装/细节修正。
+    skill_type: editor
+    applicability_conditions: [local_edit, masked_edit]
+    input_schema:
+      image: {type: artifact}
+      mask: {type: artifact}
+      instruction: {type: text}
+    output_schema:
+      edited_image: {type: artifact}
+    preconditions: [image_exists]
+    effects: [images_ready]
+    allowed_predecessors: [base_generation, edit, character_bind]
+    allowed_successors: [judge, refine]
+    failure_modes: [mask_misalignment, seam_artifact]
+    failure_mode_repairs:
+      seam_artifact:
+        - {op: ReplaceNode, skill: edit}
+      mask_misalignment:
+        - {op: RemoveNode, node_id: fill_edit_costume_fix}
+    graph_motifs: [local_edit_chain, outfit_transition_chain]
+
+  - name: judge
+    description: 质量与一致性评估。
+    skill_type: judge
+    applicability_conditions: [single_image, storyboard, evaluation]
+    input_schema:
+      images: {type: artifact}
+      task_spec: {type: object}
+    output_schema:
+      judge_report: {type: object}
+    preconditions: [images_ready]
+    effects: [quality_scored]
+    allowed_predecessors: [base_generation, edit, fill_edit, refine]
+    allowed_successors: [refine]
+    failure_modes: [score_bias, weak_failure_tagging]
+    failure_mode_repairs:
+      missing_judge:
+        - {op: AddNode, skill: judge, node_id: judge_autofix}
+    graph_motifs: [all]
+
+  - name: refine
+    description: 基于judge报告做修复增强。
+    skill_type: editor
+    applicability_conditions: [repair, quality_refinement]
+    input_schema:
+      image: {type: artifact}
+      judge_report: {type: object}
+    output_schema:
+      refined_image: {type: artifact}
+    preconditions: [judge_failed]
+    effects: [images_ready]
+    allowed_predecessors: [judge]
+    allowed_successors: [judge]
+    failure_modes: [over_sharpen, style_shift]
+    failure_mode_repairs:
+      style_shift:
+        - {op: RemoveNode, node_id: refine}
+    graph_motifs: [repair_loop_chain]
+
+motifs:
+  preprocess_chain:
+    tags: [preprocess]
+    steps: [asset_normalizer, character_bind, scene_condition]
+
+  storyboard_generation_chain:
+    tags: [storyboard, generation]
+    steps: [story_decompose, character_bind, scene_condition, transition_plan, shot_plan, pose_plan, expression_plan, continuity_state_tracker, visual_style_plan, prompt_pack_builder, base_generation, judge]
+
+  single_image_generation_chain:
+    tags: [single_image, generation]
+    steps: [character_bind, scene_condition, prompt_pack_builder, base_generation, judge]
+
+  local_edit_chain:
+    tags: [single_image, edit]
+    steps: [character_bind, scene_condition, edit, judge]
+
+  pose_control_chain:
+    tags: [pose, control]
+    steps: [pose_extract, pose_plan, prompt_pack_builder, base_generation]
+
+  outfit_transition_chain:
+    tags: [storyboard, outfit, transition]
+    steps: [story_decompose, prompt_pack_builder, base_generation, edit, judge]
+
+  repair_loop_chain:
+    tags: [repair, quality]
+    steps: [base_generation, judge, refine, judge]
+
+  cinematic_storyboard_chain:
+    tags: [storyboard, cinematic, camera]
+    steps: [story_decompose, transition_plan, shot_plan, pose_plan, expression_plan, prompt_pack_builder, base_generation, judge]
+
+  continuity_control_chain:
+    tags: [storyboard, continuity]
+    steps: [story_decompose, transition_plan, continuity_state_tracker, prompt_pack_builder, base_generation, judge]
+
+  style_consistency_chain:
+    tags: [storyboard, style]
+    steps: [scene_condition, visual_style_plan, prompt_pack_builder, base_generation, judge]
+
+  transition_aware_chain:
+    tags: [storyboard, transition]
+    steps: [story_decompose, transition_plan, shot_plan, prompt_pack_builder, base_generation, judge]

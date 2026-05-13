@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anime-pipeline-graph"
+version = "0.1.0"
+description = "Dynamic skill graph planner for anime image generation"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+authors = [{ name = "Anime Pipeline Graph" }]
+dependencies = [
+  "pydantic>=2.6,<3",
+  "pydantic-settings>=2.2,<3",
+  "typer>=0.12,<1",
+  "rich>=13.7,<14",
+  "python-dotenv>=1.0,<2",
+  "pillow>=10.2,<11",
+  "httpx>=0.27,<1",
+  "fastapi>=0.110,<1",
+  "uvicorn>=0.29,<1",
+  "openai>=1.40,<2",
+  "networkx>=3.2,<4",
+  "pyyaml>=6.0,<7",
+  "jinja2>=3.1,<4",
+  "diffusers>=0.30,<1",
+  "transformers>=4.44,<5",
+  "peft>=0.12,<1",
+  "accelerate>=0.33,<1",
+  "torch>=2.2,<3",
+  "torchvision>=0.17,<1",
+  "safetensors>=0.4,<1",
+  "opencv-python>=4.9,<5",
+  "controlnet-aux>=0.0.9,<1",
+  "numpy>=1.26,<3",
+  "pytest>=8.2,<9",
+]
+
+[project.scripts]
+anime-pipeline = "anime_pipeline_graph.cli.main:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

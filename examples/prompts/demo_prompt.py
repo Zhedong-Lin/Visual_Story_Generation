@@ -1,0 +1,1 @@
+PROMPT = "Generate a 3-panel anime storyboard using my scene reference image.Frame 1: Lulu is near a roadside bench when Jiddo, an elderly old man, gives her a flyer. Frame 2: Lulu realizes Jiddo is dangerous, and Jiddo starts chasing Lulu. Frame 3: Lulu escapes to an empty area with no people around"
