@@ -1,6 +1,6 @@
 # Storyboard Generation
 
-A web application for generating anime-style visual storyboards from a natural language prompt.
+An agent for generating anime-style visual storyboards from a natural language prompt.
 
 Users can enter a story idea, generate storyboard frames, view the generated results, and check previous generation history through a browser-based interface.
 
