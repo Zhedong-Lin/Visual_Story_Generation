@@ -1,259 +1,204 @@
 # Storyboard Generation
 
-A research prototype for dynamic skill graph planning in anime-style visual story generation. This system is a **dynamic graph planner**, not a fixed pipeline template selector.
+A web application for generating anime-style visual storyboards from a natural language prompt.
 
-The current version implements:
-- All Qwen calls through API access using the DashScope OpenAI-compatible interface.
-- Switchable image generation backends:
-  - Local Hugging Face / diffusers backend with FLUX.
-  - Doubao SeedDream4 API backend through Ark.
-- Default base generation model: `black-forest-labs/FLUX.1-dev`.
-- Character skills using `Kontext + optional LoRA + character reference images`.
-- Scene skills using scene reference images for conditioning.
-- Editing skills:
-  - Without a mask: use Kontext.
-  - With a mask: use Fill.
-  - If Fill is requested without a mask, the system automatically falls back to edit mode.
+Users can enter a story idea, generate storyboard frames, view the generated results, and check previous generation history through a browser-based interface.
 
-## 1. Project Overview
+---
 
-### System Inputs
+## GitHub Repository
 
-The system supports the following inputs:
+https://github.com/Zhedong-Lin/Visual_Story_Generation
 
-- User text prompt.
-- Optional character reference images.
-- Optional scene reference images.
-- Optional world-building text.
-- Optional historical storyboard frames.
+---
 
-### System Outputs
+## Demo Video
 
-The system can generate:
+Add the demo video link here:
 
-- A single anime-style image, or
-- A short anime storyboard with 2 to 15 frames.
+```text
+[Demo video link]
+```
 
-### Core Workflow
+---
 
-1. The parser converts the input into a `TaskSpec`.
-2. The capability planner produces a required capability combination.
-3. The skill library retrieves candidate skills and motifs.
-4. The candidate graph planner generates multiple candidate graphs from LLM, motif, memory, or fallback sources.
-5. Constraints and scoring select the best graph.
-6. Repair-as-search fixes invalid graphs using a minimal best-first strategy.
-7. The graph validator performs compatibility checks and patches.
-8. The executor runs the graph and saves all intermediate outputs.
-9. The judge evaluates the result.
-10. An optional repair planner outputs a patch when needed.
+## What This App Does
 
-## 2. End-to-End Input-to-Output Workflow
+This project provides a web interface called **AniBoard**.
 
-1. The `PROMPT` variable is written inside the script rather than entered interactively.
-2. The parser, powered by Qwen, outputs a `TaskSpec`, including character names, scene names, and the number of storyboard frames.
-3. The asset resolver automatically matches reference images by name.
-4. The capability planner, powered by Qwen, identifies required capabilities.
-5. The candidate-based graph planner outputs candidate graphs.
-6. Constraints and the scorer select the best graph.
-7. Repair search fixes the graph structure when necessary.
-8. The graph validator checks the graph and can auto-fix compatible issues.
-9. Precondition-building skills are executed:
-   - `character_bind`
-   - `scene_condition`
-   - `pose_plan` / `pose_extract`
-10. `base_generation` produces the first formal image output.
-11. Optional `edit` / `fill_edit` steps refine the result.
-12. The Qwen-based `judge` evaluates the output.
-13. If the score is low, the `repair_planner` proposes a patch.
+With AniBoard, users can:
 
-## 3. Execution Logic
+- Enter a natural language story prompt.
+- Generate an anime-style visual storyboard.
+- View the generated frames in the browser.
+- Check previous generation records in the history page.
+- Run the system locally or on a remote server.
 
-The following design choices are important:
+The system is designed for visual story generation. It takes a user prompt, processes the request, plans the generation steps, and produces storyboard images.
 
-- `character_bind` and `scene_condition` are **precondition builders**, not default post-processing modules.
-- `base_generation` is the first formal image generation step.
-- `edit` and `fill_edit` are optional correction steps, not a default iterative patch chain.
+---
 
-## 4. Test Input Rules
+## Requirements
 
-Character and scene names recognized in the prompt are automatically matched with images of the same name:
+Before running the project, make sure you have:
 
-- `lulu -> lulu.png`
-- `jiddo -> jiddo.png`
-- `cyber_city -> cyber_city.png`
+- Python 3.10
+- Conda or Miniconda
+- Git
+- A terminal or command line environment
 
-Reference image directories:
+If you run the project on a remote server through VS Code SSH, you also need to forward the web server port to your local machine.
 
-- `examples/assets/characters/`
-- `examples/assets/scenes/`
+---
 
-Supported image extensions:
+## Installation
 
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.webp`
-
-## 5. Installation
+Clone the repository:
 
 ```bash
-conda create -n anime-pipeline-graph python=3.10 -y
-conda activate anime-pipeline-graph
+git clone https://github.com/Zhedong-Lin/Visual_Story_Generation.git
+cd Visual_Story_Generation
+```
+
+Create and activate a Conda environment:
+
+```bash
+conda create -n storyboard-generation python=3.10 -y
+conda activate storyboard-generation
+```
+
+Install the project:
+
+```bash
 pip install -e .
 ```
 
-Notes:
+---
 
-- Before running local FLUX models, install the version of `torch` that matches your CUDA environment.
-- Kontext and Fill are gated models. You need to accept the model agreements on Hugging Face before using them.
-- `HF_TOKEN` is required to download gated models.
+## Run the Web App
 
-## 6. Dependencies
+Start the web application with:
 
-- `pydantic`: schema definitions.
-- `typer`: command-line interface.
-- `rich`: readable logging.
-- `python-dotenv`: loading `.env` files.
-- `pillow`: mock image generation and basic image processing.
-- `httpx` / `openai`: Qwen API client.
-- `networkx`: DAG validation and topological execution.
-- `pyyaml`: LoRA map configuration.
-- `jinja2`: reserved for prompt template expansion.
-- `diffusers` / `transformers` / `accelerate`: FLUX inference.
-- `torch` / `torchvision` / `safetensors`: inference backend.
-- `opencv-python`: image processing compatibility.
-- `controlnet-aux`: OpenPose skeleton extraction.
-- `numpy`: numerical processing.
-- `pytest`: testing.
-
-## 7. Environment Variables
-
-```env
-DASHSCOPE_API_KEY=
-QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-QWEN_MODEL_NAME=qwen-vl-max-latest
-HF_TOKEN=
-IMAGE_BACKEND=local
-FLUX_BASE_MODEL=black-forest-labs/FLUX.1-dev
-FLUX_KONTEXT_MODEL=black-forest-labs/FLUX.1-Kontext-dev
-FLUX_FILL_MODEL=black-forest-labs/FLUX.1-Fill-dev
-ARK_API_KEY=
-ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-ARK_IMAGES_ENDPOINT=/images/generations
-ARK_SEEDREAM_MODEL=ep-xxxxxx
-ARK_TIMEOUT_SECONDS=120
-ARK_RESPONSE_FORMAT=url
-ARK_DEFAULT_SIZE=1024x1024
-DEFAULT_OUTPUT_DIR=runs
+```bash
+python app.py --host 127.0.0.1 --port 8000
 ```
 
-### `IMAGE_BACKEND` Options
+After the server starts, open the following address in your browser:
 
-- `local`: use local FLUX + Kontext + optional LoRA.
-- `seedream4_api`: use Doubao SeedDream4 API. The current path runs text-to-image generation, and LoRA is not enabled.
+```text
+http://127.0.0.1:8000
+```
 
-## 8. Dry Run
+If the project is running correctly, the AniBoard homepage will appear.
+
+---
+
+
+## How to Use the Web Interface
+
+### 1. Open the Homepage
+
+After opening the local web page, you will see the AniBoard homepage.
+
+Click the start button or navigate to the workspace page to begin creating a storyboard.
+
+### 2. Enter a Story Prompt
+
+Type a natural language story prompt into the input box.
+
+Example:
+
+```text
+Lulu is sleeping on the bed. She suddenly wakes up from a nightmare. Then she cries in fear.
+```
+
+You can describe:
+
+- The main character
+- The scene
+- The action
+- The mood
+- The story events
+- The expected number of frames
+
+### 3. Generate the Storyboard
+
+Click the generate button.
+
+The system will process the prompt and generate storyboard frames.
+
+### 4. View the Output
+
+After generation finishes, the generated storyboard images will be displayed on the results page.
+
+Each image corresponds to one part of the input story.
+
+### 5. Check Generation History
+
+The history page shows previous generation records, including:
+
+- Run ID
+- Prompt
+- Number of frames
+- Generation time
+
+These history records are created during runtime and are not included in the GitHub repository.
+
+---
+
+## Quick Demo without API Keys
+
+The project also provides a dry-run script for quick testing:
 
 ```bash
 python scripts/run_demo_dry.py
 ```
 
-Features:
+Dry-run mode:
 
 - Does not require API keys.
-- Uses `MockQwenClient`.
-- Uses mock image providers based on Pillow, generating images with step labels.
-- Saves complete intermediate JSON files and images.
+- Uses mock LLM and mock image providers.
+- Generates sample output files.
+- Saves intermediate results under the `runs/` directory.
 
-## 9. Real Mode
+This mode is useful for checking whether the system can run correctly on your machine.
 
-```bash
-python scripts/run_demo_real.py
-```
 
-Requirements:
 
-- Qwen API key.
-- A local environment capable of loading FLUX, Kontext, and Fill models.
-- Hugging Face access permission and `HF_TOKEN`.
+---
 
-Example using Doubao SeedDream4 API:
 
-```bash
-export IMAGE_BACKEND=seedream4_api
-export ARK_API_KEY=your_key
-export ARK_SEEDREAM_MODEL=ep-xxxxxx
-python scripts/run_baseline_prompt_fixed_real.py --backend seedream4_api
-python scripts/run_lulu_single_lora_real.py --backend seedream4_api
-```
 
-## 10. Inspecting Intermediate Run Results
+## Output Files
 
-```bash
-python scripts/inspect_run.py <run_id>
-```
-
-Or through the CLI:
-
-```bash
-anime-pipeline inspect <run_id>
-```
-
-## 11. Known Limitations
-
-- FLUX requires a large amount of GPU memory.
-- Kontext and Fill require gated model access.
-- The current scene skill only performs reference conditioning; it is not an independent background generation model.
-- The pose skill currently performs planning and auxiliary skeleton extraction; it is not a full motion-controlled generation module.
-
-## 12. Character LoRA Notes
-
-- Reserved LoRA directory: `examples/lora/`
-- Optional configuration file:
-  - `examples/lora_map.yaml`
-  - `examples/lora_map.json`
-
-Example configuration:
-
-```yaml
-lulu: examples/lora/lulu.safetensors
-jiddo: examples/lora/jiddo.safetensors
-```
-
-Current identity consistency sources:
-
-- With LoRA: `LoRA + character reference image`.
-- Without LoRA: `character reference image only`.
-
-LoRA is an enhancement, not a required component.
-
-## 13. CLI Usage
-
-```bash
-anime-pipeline parse --prompt "lulu is chased by jiddo in cyber_city"
-anime-pipeline resolve-assets --prompt "lulu is chased by jiddo in cyber_city"
-anime-pipeline plan --prompt "lulu is chased by jiddo in cyber_city"
-anime-pipeline run --prompt "lulu is chased by jiddo in cyber_city" --dry-run
-anime-pipeline inspect <run_id>
-anime-pipeline repair <run_id> --dry-run
-```
-
-## 14. Testing
-
-```bash
-pytest -q
-```
-
-## 15. Directory Structure
-
-See the repository file tree. All key intermediate artifacts are saved under:
+Generated results are saved under:
 
 ```bash
 runs/<run_id>/
 ```
 
-## 16. Development Notes
+A run folder may include:
 
-Graph-of-Skills incremental refactoring documentation:
+- Generated storyboard images
+- Intermediate JSON files
+- Planning results
+- Execution logs
+- Graph visualization files
 
-- `docs/graph_of_skills_planner.md`
+The `runs/` directory is ignored by Git because it contains runtime outputs.
+
+---
+
+
+## Notes
+
+- Runtime outputs such as generated images and history records are not included in the GitHub repository.
+- API keys should be stored locally in a `.env` file and should not be uploaded to GitHub.
+- If local image generation models are used, make sure the machine has enough GPU memory.
+- Some Python warnings may appear when starting the server. They can usually be ignored if the web page opens normally.
+
+---
+
+## Project Summary
+
+This project is an intelligent visual storyboard generation system. It receives a user story prompt, plans the generation process, executes the required steps, and produces storyboard images through a web interface.
