@@ -1,81 +1,100 @@
-# anime_pipeline_graph
+# Storyboard Generation
 
-动漫图动态 skill graph planner 研究原型。这个系统是**动态图规划器**，不是固定 pipeline 模板选择器。
+A research prototype for dynamic skill graph planning in anime-style visual story generation. This system is a **dynamic graph planner**, not a fixed pipeline template selector.
 
-当前版本严格实现：
-- Qwen 全部走 API（DashScope OpenAI 兼容）
-- 图像生成支持两种后端可切换：
-  - 本地 Hugging Face/diffusers（FLUX）
-  - 豆包 SeedDream4 API（Ark）
-- base generation 默认 `black-forest-labs/FLUX.1-dev`
-- 角色 skill 使用 `Kontext + (optional LoRA) + 角色参考图`
-- 场景 skill 使用场景参考图做 conditioning
-- 编辑 skill：无 mask 用 Kontext，有 mask 用 Fill，无 mask 时 fill 自动回退 edit
+The current version implements:
+- All Qwen calls through API access using the DashScope OpenAI-compatible interface.
+- Switchable image generation backends:
+  - Local Hugging Face / diffusers backend with FLUX.
+  - Doubao SeedDream4 API backend through Ark.
+- Default base generation model: `black-forest-labs/FLUX.1-dev`.
+- Character skills using `Kontext + optional LoRA + character reference images`.
+- Scene skills using scene reference images for conditioning.
+- Editing skills:
+  - Without a mask: use Kontext.
+  - With a mask: use Fill.
+  - If Fill is requested without a mask, the system automatically falls back to edit mode.
 
-## 1. 项目简介
+## 1. Project Overview
 
-系统输入：
-- 用户文本 prompt
-- 可选角色参考图
-- 可选场景参考图
-- 可选世界观文本
-- 可选历史分镜图
+### System Inputs
 
-系统输出：
-- 单张动漫图，或
-- 2~15 张短分镜动漫图
+The system supports the following inputs:
 
-核心流程：
-1. parser 把输入转 TaskSpec
-2. capability planner 产出能力组合
-3. skill library 检索候选 skills/motifs
-4. candidate graph planner 生成多候选图（LLM/motif/fallback）
-5. constraints + scoring 选最优图
-6. repair-as-search 修复非法图（最小 best-first）
-7. graph validator 兼容校验与补丁
-8. executor 执行图并落盘所有中间结果
-9. judge 评分
-10. 可选 repair planner 输出 patch
+- User text prompt.
+- Optional character reference images.
+- Optional scene reference images.
+- Optional world-building text.
+- Optional historical storyboard frames.
 
-## 2. 输入到输出完整流程
+### System Outputs
 
-1. `PROMPT` 变量写在脚本里（不是交互输入）
-2. parser（Qwen）输出 TaskSpec（含角色名/场景名/分镜数）
-3. asset resolver 按名字自动匹配参考图
-4. capability planner（Qwen）
-5. graph planner（candidate-based）输出候选 graphs
-6. constraints + scorer 选择最优 graph
-7. repair search（必要时）修复结构
-8. graph validator 校验并可 auto-fix
-9. 前置条件构建：
+The system can generate:
+
+- A single anime-style image, or
+- A short anime storyboard with 2 to 15 frames.
+
+### Core Workflow
+
+1. The parser converts the input into a `TaskSpec`.
+2. The capability planner produces a required capability combination.
+3. The skill library retrieves candidate skills and motifs.
+4. The candidate graph planner generates multiple candidate graphs from LLM, motif, memory, or fallback sources.
+5. Constraints and scoring select the best graph.
+6. Repair-as-search fixes invalid graphs using a minimal best-first strategy.
+7. The graph validator performs compatibility checks and patches.
+8. The executor runs the graph and saves all intermediate outputs.
+9. The judge evaluates the result.
+10. An optional repair planner outputs a patch when needed.
+
+## 2. End-to-End Input-to-Output Workflow
+
+1. The `PROMPT` variable is written inside the script rather than entered interactively.
+2. The parser, powered by Qwen, outputs a `TaskSpec`, including character names, scene names, and the number of storyboard frames.
+3. The asset resolver automatically matches reference images by name.
+4. The capability planner, powered by Qwen, identifies required capabilities.
+5. The candidate-based graph planner outputs candidate graphs.
+6. Constraints and the scorer select the best graph.
+7. Repair search fixes the graph structure when necessary.
+8. The graph validator checks the graph and can auto-fix compatible issues.
+9. Precondition-building skills are executed:
    - `character_bind`
    - `scene_condition`
    - `pose_plan` / `pose_extract`
-10. `base_generation` 第一次正式出图
-11. 可选 `edit` / `fill_edit`
-12. `judge`（Qwen）
-13. 分数低则 `repair_planner`
+10. `base_generation` produces the first formal image output.
+11. Optional `edit` / `fill_edit` steps refine the result.
+12. The Qwen-based `judge` evaluates the output.
+13. If the score is low, the `repair_planner` proposes a patch.
 
-## 3. 调用逻辑声明（关键）
+## 3. Execution Logic
 
-- `character_bind` 与 `scene_condition` 是**前置条件构建器**，不是默认后处理器。
-- `base_generation` 是第一次正式出图。
-- `edit/fill_edit` 是可选修正步骤，不是默认循环补丁链。
+The following design choices are important:
 
-## 4. 测试输入规则
+- `character_bind` and `scene_condition` are **precondition builders**, not default post-processing modules.
+- `base_generation` is the first formal image generation step.
+- `edit` and `fill_edit` are optional correction steps, not a default iterative patch chain.
 
-Prompt 中识别到的角色/场景名会自动匹配同名图片：
+## 4. Test Input Rules
+
+Character and scene names recognized in the prompt are automatically matched with images of the same name:
+
 - `lulu -> lulu.png`
 - `jiddo -> jiddo.png`
 - `cyber_city -> cyber_city.png`
 
-目录：
+Reference image directories:
+
 - `examples/assets/characters/`
 - `examples/assets/scenes/`
 
-支持后缀：`.png .jpg .jpeg .webp`
+Supported image extensions:
 
-## 5. 环境安装
+- `.png`
+- `.jpg`
+- `.jpeg`
+- `.webp`
+
+## 5. Installation
 
 ```bash
 conda create -n anime-pipeline-graph python=3.10 -y
@@ -83,30 +102,31 @@ conda activate anime-pipeline-graph
 pip install -e .
 ```
 
-说明：
-- 跑本地 FLUX 前，请按你的 CUDA 版本安装匹配的 `torch`。
-- Kontext/Fill 为 gated 模型，需要先在 Hugging Face 接受协议。
-- 需要 `HF_TOKEN` 才能下载 gated 模型。
+Notes:
 
-## 6. 依赖说明
+- Before running local FLUX models, install the version of `torch` that matches your CUDA environment.
+- Kontext and Fill are gated models. You need to accept the model agreements on Hugging Face before using them.
+- `HF_TOKEN` is required to download gated models.
 
-- `pydantic`: 全部 schema 定义
-- `typer`: CLI
-- `rich`: 可读日志
-- `python-dotenv`: 加载 `.env`
-- `pillow`: mock 图片与基础图像处理
-- `httpx`/`openai`: Qwen API 客户端
-- `networkx`: DAG 校验/拓扑执行
-- `pyyaml`: LoRA map 配置
-- `jinja2`: 预留 prompt 模板扩展
-- `diffusers`/`transformers`/`accelerate`: FLUX 推理
-- `torch`/`torchvision`/`safetensors`: 推理底层
-- `opencv-python`: 图像工具链兼容
-- `controlnet-aux`: OpenPose skeleton 提取
-- `numpy`: 数值处理
-- `pytest`: 测试
+## 6. Dependencies
 
-## 7. 环境变量
+- `pydantic`: schema definitions.
+- `typer`: command-line interface.
+- `rich`: readable logging.
+- `python-dotenv`: loading `.env` files.
+- `pillow`: mock image generation and basic image processing.
+- `httpx` / `openai`: Qwen API client.
+- `networkx`: DAG validation and topological execution.
+- `pyyaml`: LoRA map configuration.
+- `jinja2`: reserved for prompt template expansion.
+- `diffusers` / `transformers` / `accelerate`: FLUX inference.
+- `torch` / `torchvision` / `safetensors`: inference backend.
+- `opencv-python`: image processing compatibility.
+- `controlnet-aux`: OpenPose skeleton extraction.
+- `numpy`: numerical processing.
+- `pytest`: testing.
+
+## 7. Environment Variables
 
 ```env
 DASHSCOPE_API_KEY=
@@ -127,101 +147,113 @@ ARK_DEFAULT_SIZE=1024x1024
 DEFAULT_OUTPUT_DIR=runs
 ```
 
-`IMAGE_BACKEND` 说明：
-- `local`：走本地 FLUX + Kontext + (optional LoRA)
-- `seedream4_api`：走豆包 SeedDream4 API（当前按 text2img 路径运行；LoRA 不启用）
+### `IMAGE_BACKEND` Options
 
-## 8. Dry-run
+- `local`: use local FLUX + Kontext + optional LoRA.
+- `seedream4_api`: use Doubao SeedDream4 API. The current path runs text-to-image generation, and LoRA is not enabled.
+
+## 8. Dry Run
 
 ```bash
 python scripts/run_demo_dry.py
 ```
 
-特点：
-- 不需要 API key
-- 使用 `MockQwenClient`
-- 使用 mock image providers（Pillow 生成带 step 标识图）
-- 保存完整中间 JSON/图片
+Features:
 
-## 9. Real mode
+- Does not require API keys.
+- Uses `MockQwenClient`.
+- Uses mock image providers based on Pillow, generating images with step labels.
+- Saves complete intermediate JSON files and images.
+
+## 9. Real Mode
 
 ```bash
 python scripts/run_demo_real.py
 ```
 
-要求：
-- 配置 Qwen API key
-- 本地可加载 FLUX/Kontext/Fill 模型
-- 具备 Hugging Face 权限和 `HF_TOKEN`
+Requirements:
 
-使用豆包 SeedDream4 API（示例）：
+- Qwen API key.
+- A local environment capable of loading FLUX, Kontext, and Fill models.
+- Hugging Face access permission and `HF_TOKEN`.
+
+Example using Doubao SeedDream4 API:
 
 ```bash
 export IMAGE_BACKEND=seedream4_api
-export ARK_API_KEY=你的key
+export ARK_API_KEY=your_key
 export ARK_SEEDREAM_MODEL=ep-xxxxxx
 python scripts/run_baseline_prompt_fixed_real.py --backend seedream4_api
 python scripts/run_lulu_single_lora_real.py --backend seedream4_api
 ```
 
-## 10. 查看 runs 中间结果
+## 10. Inspecting Intermediate Run Results
 
 ```bash
 python scripts/inspect_run.py <run_id>
 ```
 
-或 CLI：
+Or through the CLI:
 
 ```bash
 anime-pipeline inspect <run_id>
 ```
 
-## 11. 已知限制
+## 11. Known Limitations
 
-- FLUX 显存占用高
-- Kontext/Fill 需要 gated access
-- 场景 skill 当前仅做 reference conditioning，不是独立背景模型
-- Pose skill 当前是“规划 + 辅助骨架”，不是完整动作控制生成器
+- FLUX requires a large amount of GPU memory.
+- Kontext and Fill require gated model access.
+- The current scene skill only performs reference conditioning; it is not an independent background generation model.
+- The pose skill currently performs planning and auxiliary skeleton extraction; it is not a full motion-controlled generation module.
 
-## 12. 角色 LoRA 说明
+## 12. Character LoRA Notes
 
-- LoRA 目录预留：`examples/lora/`
-- 可选配置：`examples/lora_map.yaml` 或 `examples/lora_map.json`
-- 配置格式示例：
+- Reserved LoRA directory: `examples/lora/`
+- Optional configuration file:
+  - `examples/lora_map.yaml`
+  - `examples/lora_map.json`
+
+Example configuration:
 
 ```yaml
 lulu: examples/lora/lulu.safetensors
 jiddo: examples/lora/jiddo.safetensors
 ```
 
-当前版本身份一致性来源：
-- 有 LoRA 时：`LoRA + 角色参考图`
-- 无 LoRA 时：`仅角色参考图`
+Current identity consistency sources:
 
-LoRA 是增强项，不是必须项。
+- With LoRA: `LoRA + character reference image`.
+- Without LoRA: `character reference image only`.
 
-## 13. CLI
+LoRA is an enhancement, not a required component.
+
+## 13. CLI Usage
 
 ```bash
-anime-pipeline parse --prompt "lulu在cyber_city被jiddo追"
-anime-pipeline resolve-assets --prompt "lulu在cyber_city被jiddo追"
-anime-pipeline plan --prompt "lulu在cyber_city被jiddo追"
-anime-pipeline run --prompt "lulu在cyber_city被jiddo追" --dry-run
+anime-pipeline parse --prompt "lulu is chased by jiddo in cyber_city"
+anime-pipeline resolve-assets --prompt "lulu is chased by jiddo in cyber_city"
+anime-pipeline plan --prompt "lulu is chased by jiddo in cyber_city"
+anime-pipeline run --prompt "lulu is chased by jiddo in cyber_city" --dry-run
 anime-pipeline inspect <run_id>
 anime-pipeline repair <run_id> --dry-run
 ```
 
-## 14. 测试
+## 14. Testing
 
 ```bash
 pytest -q
 ```
 
-## 15. 目录结构
+## 15. Directory Structure
 
-见本文开头与仓库文件树；所有关键中间产物会进入 `runs/<run_id>/`。
+See the repository file tree. All key intermediate artifacts are saved under:
 
-## 16. 开发说明
+```bash
+runs/<run_id>/
+```
 
-Graph-of-Skills 增量改造说明文档：
+## 16. Development Notes
+
+Graph-of-Skills incremental refactoring documentation:
+
 - `docs/graph_of_skills_planner.md`
