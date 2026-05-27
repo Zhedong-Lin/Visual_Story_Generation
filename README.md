@@ -8,7 +8,9 @@ Users can enter a story idea, generate storyboard frames, view the generated res
 
 ## GitHub Repository
 
+```text
 https://github.com/Zhedong-Lin/Visual_Story_Generation
+```
 
 ---
 
@@ -17,7 +19,7 @@ https://github.com/Zhedong-Lin/Visual_Story_Generation
 Add the demo video link here:
 
 ```text
-[Demo video link]
+https://drive.google.com/file/d/1EBKKVUzVGaJlIF72s4a368dG4nHvmmlU/view?usp=drive_link
 ```
 
 ---
